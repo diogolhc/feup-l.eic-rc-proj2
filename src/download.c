@@ -39,11 +39,13 @@ int main(int argc, char *argv[]) {
     }
     
     if (ftp_login(socket_fd, user, password) != 0) {
+        ftp_close(socket_fd);
         delete_parsed_params(parsed_params);
         return -1;
     }
 
-    if (ftp_download_file(socket_fd, parsed_params->url_path) != 0) {
+    if (ftp_download_file(socket_fd, parsed_params->host, parsed_params->url_path) != 0) {
+        ftp_close(socket_fd);
         delete_parsed_params(parsed_params);
         return -1;
     }

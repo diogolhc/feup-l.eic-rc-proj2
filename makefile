@@ -1,4 +1,4 @@
-all: download
+all: download downloadd
 
 CC=gcc
 CFLAGS=-Wall
@@ -8,7 +8,7 @@ download: src/*.c src/*.h
 	$(CC) $(CFLAGS) -o download src/*.c -lm
 
 downloadd: src/*.c src/*.h
-	$(CC) $(CFLAGS_SANITAZE) -o download src/*.c -lm
+	$(CC) $(CFLAGS_SANITAZE) -o downloadd src/*.c -lm
 
 clean:
 	rm -rf download downloadd

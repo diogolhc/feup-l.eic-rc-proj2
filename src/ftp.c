@@ -1,6 +1,8 @@
 #include "ftp.h"
 #include "ftp_return_codes.h"
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -106,7 +108,18 @@ static int get_num_length(int num) {
     return ceil(log10((double)num));
 }
 
-static int ftp_read_response(int socket_fd) {
+static int get_port(char *line_received) {
+    int port_msb = -1;
+    int port_lsb = -1;
+
+    if (sscanf(line_received, "227 Entering Passive Mode (%*d,%*d,%*d,%*d,%d,%d)\r\n", &port_msb, &port_lsb) < 2) {
+        return -1;
+    }
+
+    return port_msb * 256 + port_lsb;
+}
+
+static int ftp_read_response(int socket_fd, int *port) {
     if (socket_fd < 0) {
         return -1;
     }
@@ -126,6 +139,11 @@ static int ftp_read_response(int socket_fd) {
         int resp_num_digits = get_num_length(response_code);
         if (line_received[resp_num_digits] == ' ') {
             last_line_received = true;
+
+            if (port  != NULL) {
+                // if wanting to retrieve port from pasv return
+                *port = get_port(line_received);
+            }
         }
 
         free(line_received);
@@ -150,7 +168,7 @@ int ftp_setup(char *host_name) {
         return -1;
     }
 
-    if (ftp_read_response(socket_fd_command) != FTP_CODE_SERVICE_READY_FOR_NEW_USER) {
+    if (ftp_read_response(socket_fd_command, NULL) != FTP_CODE_SERVICE_READY_FOR_NEW_USER) {
         return -1;
     }
 
@@ -162,30 +180,26 @@ static int ftp_send_command(int socket_fd, char *command, char *arg) {
         return -1;
     }
 
-    int cmd_size = snprintf(NULL, 0, "%s %s\r\n",
-                                command, arg);  
-    
+    int cmd_size = snprintf(NULL, 0, "%s %s\r\n", command, arg);  
     if (cmd_size == -1) {
         return -1;
     }
 
     char *cmd = malloc(cmd_size + 1); // +1 for '\0'
-
     if (cmd == NULL) {
         return -1;
     }
 
-    if (snprintf(cmd, cmd_size + 1, "%s %s\r\n",
-        command, arg) < 0 ) {
+    if (snprintf(cmd, cmd_size + 1, "%s %s\r\n", command, arg) < 0 ) {
         free(cmd);
         return -1;
     }
 
-    printf("SENT: %s", cmd); // << DEBUG
     if (send(socket_fd, cmd, cmd_size, 0) != cmd_size) {
         free(cmd);
         return -1;
     }
+    printf("SENT: %s", cmd); // << DEBUG
 
     free(cmd);
     return 0;
@@ -200,7 +214,7 @@ int ftp_login(int socket_fd, char *user, char *pass) {
         return -1;
     }
 
-    if (ftp_read_response(socket_fd) != FTP_CODE_USER_NAME_OKAY_NEED_PASSWORD) {
+    if (ftp_read_response(socket_fd, NULL) != FTP_CODE_USER_NAME_OKAY_NEED_PASSWORD) {
         // TODO should we check for other returns? there are many...
         return -1;
     }
@@ -209,7 +223,7 @@ int ftp_login(int socket_fd, char *user, char *pass) {
         return -1;
     }
 
-    if (ftp_read_response(socket_fd) != FTP_CODE_LOGIN_SUCCESSFUL) {
+    if (ftp_read_response(socket_fd, NULL) != FTP_CODE_LOGIN_SUCCESSFUL) {
         // TODO should we check for other returns? there are many...
         return -1;
     }
@@ -217,16 +231,88 @@ int ftp_login(int socket_fd, char *user, char *pass) {
     return 0;
 }
 
-int ftp_download_file(int socket_fd, char *path) {
-    // TODO
+static int ftp_send_passv_and_get_port(int socket_fd) {
+    int port = -1;
+
+    if (ftp_send_command(socket_fd, "PASV", "") != 0) {
+        return -1;
+    }
+
+    if (ftp_read_response(socket_fd, &port) != FTP_CODE_ENTERING_PASSIVE_MODE) {
+        // TODO should we check for other returns? there are many...
+        return -1;
+    }
+
+    return port;
+}
+
+static int ftp_get_file(int socket_data_fd, char *path) {
+    if (path == NULL) {
+        return -1;
+    }
+    
+    FILE *fp = fopen(basename(path), "w");
+    if (fp == NULL) {
+        perror("");
+        return -1;
+    }
+    int res;
+    char buffer[1000];
+    while ((res = read(socket_data_fd, buffer, 1000)) > 0) {
+        fwrite(buffer, sizeof(char), res, fp);
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+int ftp_download_file(int socket_fd, char *host, char *path) {
+    int port = ftp_send_passv_and_get_port(socket_fd);
+
+    if (port < 0) {
+        return -1;
+    }
+
+    char *host_ip = get_ip(host);
+    if (host_ip == NULL) {
+        return -1;
+    }
+
+    int socket_data_fd = connect_to_host(host_ip, port);
+    if (socket_data_fd < 0) {
+        return -1;
+    }
+
+    if (ftp_send_command(socket_fd, "RETR", path) != 0) {
+        close(socket_data_fd);
+        return -1;
+    }
+
+    if (ftp_read_response(socket_fd, NULL) < 0) {
+        close(socket_data_fd);
+        return -1;
+    }
+
+    if (ftp_get_file(socket_data_fd, path) != 0) {
+        close(socket_data_fd);
+        return -1;
+    }
+
+    if (ftp_read_response(socket_fd, NULL) < 0) {
+        close(socket_data_fd);
+        return -1;
+    }
+    
+    close(socket_data_fd);
     return 0;
 }
 
 int ftp_close(int socket_fd) {
     ftp_send_command(socket_fd, "QUIT", "");
-    if (ftp_read_response(socket_fd) != FTP_CODE_SERVICE_CLOSING_CONTROL_CONNECTION) {
-        // TODO what to do?
+    if (ftp_read_response(socket_fd, NULL) != FTP_CODE_SERVICE_CLOSING_CONTROL_CONNECTION) {
+        // TODO should we check for other returns? there are many...
     }
+
     close(socket_fd);
     return 0;
 }
