@@ -76,4 +76,6 @@ void delete_parsed_params(parsed_params_t *parsed_params) {
     if (parsed_params->password)    free(parsed_params->password);
     if (parsed_params->host)        free(parsed_params->host);
     if (parsed_params->url_path)    free(parsed_params->url_path);
+
+    free(parsed_params);
 }

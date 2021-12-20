@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
     printf("USER: \"%s\"\n", parsed_params->user);
     printf("PASSWORD: \"%s\"\n", parsed_params->password);
     printf("HOST: \"%s\"\n", parsed_params->host);
-    printf("URL-PATH: \"%s\"\n", parsed_params->url_path);
+    printf("URL-PATH: \"%s\"\n\n", parsed_params->url_path);
 
     int socket_fd = -1;
     if ((socket_fd = ftp_setup(parsed_params->host)) < 0) {
@@ -27,7 +27,18 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    if (ftp_login(socket_fd, parsed_params->user, parsed_params->password) != 0) {
+    char user_anonymous[] = "anonymous";
+    char pass_anonymous[] = "pass";
+    char *user            = parsed_params->user;
+    char *password        = parsed_params->password;
+
+    // if no user argument
+    if (user[0] == '\0') {
+        user = user_anonymous;
+        password = pass_anonymous;
+    }
+    
+    if (ftp_login(socket_fd, user, password) != 0) {
         delete_parsed_params(parsed_params);
         return -1;
     }

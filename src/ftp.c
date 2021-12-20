@@ -120,14 +120,13 @@ static int ftp_read_response(int socket_fd) {
             return -1;
         }
 
-        printf("%s", line_received); // << DEBUG
+        printf("RECV: %s", line_received); // << DEBUG
 
         response_code = atoi(line_received);
         int resp_num_digits = get_num_length(response_code);
         if (line_received[resp_num_digits] == ' ') {
             last_line_received = true;
         }
-        
 
         free(line_received);
         line_received = NULL;
@@ -151,26 +150,70 @@ int ftp_setup(char *host_name) {
         return -1;
     }
 
-    int res = ftp_read_response(socket_fd_command);
-    if (res != FTP_CODE_SERVICE_READY_FOR_NEW_USER) {
+    if (ftp_read_response(socket_fd_command) != FTP_CODE_SERVICE_READY_FOR_NEW_USER) {
         return -1;
     }
 
     return socket_fd_command;
 }
 
-// TODO is this wrapper necessary?
-static int ftp_send_command(int socket_fd, char *cmd) {
-    size_t n = strlen(cmd);
-    if (send(socket_fd, cmd, n, 0) != n) {
+static int ftp_send_command(int socket_fd, char *command, char *arg) {
+    if (command == NULL || arg == NULL) {
         return -1;
     }
 
+    int cmd_size = snprintf(NULL, 0, "%s %s\r\n",
+                                command, arg);  
+    
+    if (cmd_size == -1) {
+        return -1;
+    }
+
+    char *cmd = malloc(cmd_size + 1); // +1 for '\0'
+
+    if (cmd == NULL) {
+        return -1;
+    }
+
+    if (snprintf(cmd, cmd_size + 1, "%s %s\r\n",
+        command, arg) < 0 ) {
+        free(cmd);
+        return -1;
+    }
+
+    printf("SENT: %s", cmd); // << DEBUG
+    if (send(socket_fd, cmd, cmd_size, 0) != cmd_size) {
+        free(cmd);
+        return -1;
+    }
+
+    free(cmd);
     return 0;
 }
 
 int ftp_login(int socket_fd, char *user, char *pass) {
-    // TODO
+    if (user == NULL || pass == NULL) {
+        return -1;
+    }
+
+    if (ftp_send_command(socket_fd, "USER", user) != 0) {
+        return -1;
+    }
+
+    if (ftp_read_response(socket_fd) != FTP_CODE_USER_NAME_OKAY_NEED_PASSWORD) {
+        // TODO should we check for other returns? there are many...
+        return -1;
+    }
+
+    if (ftp_send_command(socket_fd, "PASS", pass) != 0) {
+        return -1;
+    }
+
+    if (ftp_read_response(socket_fd) != FTP_CODE_LOGIN_SUCCESSFUL) {
+        // TODO should we check for other returns? there are many...
+        return -1;
+    }
+
     return 0;
 }
 
@@ -180,7 +223,10 @@ int ftp_download_file(int socket_fd, char *path) {
 }
 
 int ftp_close(int socket_fd) {
-    ftp_send_command(socket_fd, "QUIT\r\n");
+    ftp_send_command(socket_fd, "QUIT", "");
+    if (ftp_read_response(socket_fd) != FTP_CODE_SERVICE_CLOSING_CONTROL_CONNECTION) {
+        // TODO what to do?
+    }
     close(socket_fd);
     return 0;
 }
