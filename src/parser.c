@@ -6,7 +6,7 @@
 #include <regex.h>
 #include <string.h>
 
-static const char *REGULAR_EXPRESSION = "ftp://((.+):(.+)@)?([^/@:]+)(/[^\f\n\r\t\v\x20]*)";
+static const char *REGULAR_EXPRESSION = "ftp://((.+):(.+)@)?([^/@:]+)/([^\f\n\r\t\v\x20]*)";
 
 #define RE_NUM_CAPTURES 6
 #define RE_USER 2
