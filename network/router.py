@@ -4,11 +4,11 @@
 
 save_name = "rt.conf"
 
-_router_name = "gnu-rtr5"
+_router_name = "tux-rtr5"
 
 # W = 1 in lab I321
 # W = 2 in lab I320
-_W = 2
+_W = 1
 
 # table number
 _Y = 3
@@ -34,7 +34,6 @@ logging buffered 51200 warnings
 enable secret 5 $1$u53Q$vBawpP8.1YpCT6ypap1zX.
 !
 no aaa new-model
-dot11 syslog
 ip source-route
 !
 !
@@ -63,7 +62,7 @@ archive
 !
 !
 !
-interface FastEthernet0/1
+interface GigabitEthernet0/1
  description $ETH-LAN$$ETH-SW-LAUNCH$$INTF-INFO-FE 0$
  ip address 172.16.{W}.{Y}9 255.255.255.0
  ip nat outside
@@ -71,7 +70,7 @@ interface FastEthernet0/1
  duplex auto
  speed auto
 !
-interface FastEthernet0/0
+interface GigabitEthernet0/0
  ip address 172.16.{Y}1.254 255.255.255.0
  ip nat inside
  ip virtual-reassembly
