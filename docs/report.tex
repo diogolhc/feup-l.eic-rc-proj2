@@ -7,7 +7,7 @@
 \usepackage{float}
 \usepackage[english]{babel}
 
-\geometry{margin=1.0in}
+\geometry{margin=1.35in}
 
 %%% Code style %%%
 
@@ -58,13 +58,23 @@
     \textbf{Summary}
 \end{center}
 
-    % TODO
-    
+    This report describes the steps taken to configure a computer network with 2 VLANs using 3 computers,
+    1 switch, 1 Cisco router and connection to the internet to download a file with a download
+    application also implemented and described in this report.
+    The download application, which is a FTP client, is described first in detail. Regex was used to
+    parse the URL given as argument and it uses sockets to create 2 connections (data and control connections).
+    Afterwards, the network configuration and analysis is described for each of the four experiments.
 
 
 %%% Introduction %%%
 \section{Introduction}
-    % TODO
+    The objective of this assignment is to implement an FTP client (download application) and
+    configure a computer network with 2 VLANs, composed by 3 computers, 1 switch, 1 cisco router
+    and connection to the internet so that the application can be tested in it afterwards.
+
+    In the first part of this report we describe the download application implemented and in
+    the second part the network configuration.
+
 
 
 %%% Part 1 - Download application %%%
@@ -181,18 +191,20 @@ ifconfig eth 0 172.16.30.254/24 # On tux34, configures it's ip address on eth0
 route -n    # Inspect the routes that were setup
 arp -a      # Check the arp tables
 \end{lstlisting}
-
-            Arp  packets are used to map an IP address to 
-            a physical address (MAC). When a host wants to send a packet to another host, whose 
-            IP address is known but not the MAC, on the same LAN it first Broadcasts an ARP packet 
-            that asks for the MAC address associated with the destination's IP address. 
-            This is needed as Network Interface Controllers don't have IP addresses but 
+            
+        % Analysis of the logs %
+        \subsubsection{Analysis of the logs}
+            ARP packets are used to map an IP address to a physical address (MAC). When a host wants
+            to send a packet to another host, whose IP address is known but not the MAC, on the same LAN
+            it first Broadcasts an ARP packet that asks for the MAC address associated with the
+            destination's IP address. This is needed as Network Interface Controllers don't have IP addresses but 
             MAC addresses. We should now be able to ping the tux33 from tux34 and vice-versa.
+
             The ping command uses ICMP packets, these packets are sent from both origin (request) 
             and the destination (response). ICMP packets contain the Ether layer, which has both
             target and source's MAC addresses, and also contains the IP layer that holds the
-            source's and target's IP addresses. 
-            % TODO esta parte está muito solta%
+            source's and target's IP addresses.
+
             Ethernet frames have an header, and this header has an EtherType field, this field
             is what indicates which protocol is encased in the payload (ARP, IP, ICMP, etc.), 
             the size of these frames can be determined by detecting the end of the frame that
@@ -202,23 +214,15 @@ arp -a      # Check the arp tables
             due to it's address persistance, whereas interfaces or addresses of a device may change, 
             the loopback's address doesn't.
 
-            
-        % Analysis of the logs %
-        \subsubsection{Analysis of the logs}
-            % TODO logs
-            
-            
-
-
 
     %% Experiment 2 %%
     \subsection{Experiment 2}
         % Objectives %
         \subsubsection{Objectives}
-            In this experiment 2 virtual LANs will be setup on the switch. 
+            In this experiment, 2 virtual LANs will be setup on the switch. 
             VLAN30 composed by previously configurated tux33 and tux34, and VLAN31 composed
             by tux32. These virtual LANs will stop the tux32 from accessing tux33 and tux34,
-            and vice-versa, even though they are all connected to the same switch
+            and vice-versa, even though they are all connected to the same switch.
             
         % Network architecture %
         \subsubsection{Network architecture}
@@ -237,7 +241,7 @@ ifconfig eth0 172.16.31.1/24    # Configures it's ip address on eth0
 
             The switch also needs to be configurated which can be done by connecting one of
             the tux's serial ports to the switch controller. After accessing the Switch's
-            terminal to create the VLANs use:
+            terminal, to create the VLANs use:
 
 \begin{lstlisting}[language=sh]
 configure terminal  # Configure terminal
@@ -247,7 +251,7 @@ end                 # Exit config mode
 \end{lstlisting}
 
             Now the ports for each VLAN have to be specified, for simplification purposes
-            the ports used for each tux are: % TODO don't say this, just say we used these
+            the ports used for each tux are:
 
             \begin{itemize}
                 \item tux32 -- PORT 12
@@ -281,31 +285,67 @@ Switch(config-if)# switchport access vlan 31
 Switch(config-if)# end
 \end{lstlisting}
 
-            % TODO How many broadcast domains are there? How can you conclude it from the logs %
-
-
         % Analysis of the logs %
         \subsubsection{Analysis of the logs}
-            % TODO
+            After pinging in broadcast from tux33 and tux32 and watching where the ICMP packets
+            are received we concluded that there are 2 broadcast domains, one per VLAN.
 
 
     %% Experiment 3 %%
     \subsection{Experiment 3}
         % Objectives %
         \subsubsection{Objectives}
-            % TODO
+            The objective of this experiment is to analyse the configuration of a cisco router,
+            testing DNS entries and configuring routes on the local machine.
 
         % Network architecture %
         \subsubsection{Network architecture}
-            % TODO
+            Since this was a remote experiment, there is no network architecture.
 
-        % Main configuration commands %
-        \subsubsection{Main configuration commands}
-            % TODO
+        % Main configuration commands and analysis of the logs %
+        \subsubsection{Main configuration commands and analysis of the logs}
+            
+            Setting static routing on is the fastest way to achieve communication in routed IP networks,
+            by pointing to the next hop router which is on the way to reach destination.
 
-        % Analysis of the logs %
-        \subsubsection{Analysis of the logs}
-            % TODO
+\begin{lstlisting}
+Router# configure terminal
+Router(config)# ip route {destination} 255.255.255.0 {next hop router address}
+\end{lstlisting}       
+ 
+
+            \noindent NAT can be configured in a commercial Cisco router according to the \href{https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/ipaddr_nat/configuration/xe-16/nat-xe-16-book/iadnat-addr-consv.html}{reference}:
+
+\begin{lstlisting}
+enable
+configure terminal
+ip nat inside source static local-ip global-ip
+interface type number
+ip address ip-address mask [secondary]
+ip nat inside
+exit
+interface type number
+ip address ip-address mask [secondary]
+ip nat outside
+end
+\end{lstlisting}
+
+            NAT is a method that maps multiple local IPs to a public one before transferring the information.
+            This allows an organization to have multiple devices using the same public IP that can be
+            accessed with different ports.
+
+            To change the lookup table for hostnames we have to edit the /etc/hosts. For example, to add
+            an entry to google with other name (youtubas) we had to add the line: 142.250.200.142 youtubas.
+
+            DNS packets were sent before ICMP's request/reply packets, upon the use of the ping
+            command, to identify the target's IP (parlamento.pt in this case).
+
+            Concerning the Linux routing, there were ICMP packets being requested by the gateway that was routing 
+            104.17.113.188 to the device to keep the connection alive. The routes setup on the device were the
+            default gateway, which was removed and the route to 104.17.113.188 through 172.23.160.1 which was setup
+            during the experiment.
+
+
 
 
     %% Experiment 4 %%
@@ -359,8 +399,7 @@ route add -net 172.16.31.0/24 gw 172.16.30.254 # Allows access to 172.16.31.X th
 route add -net 172.16.30.0/24 gw 172.16.31.253 # Allows access to 172.16.30.X through tux34 (172.16.31.253)
 \end{lstlisting}
 
-            % TODO broken english, but use the pings below on the lstlisting
-            Tux33 should now be able to communicate with every the other network interface 
+            Tux33 should now be able to communicate with every other network interface 
             (172.16.30.254, 172.16.31.253, 172.16.31.1) this can be checked by using 
             \textit{ping}.
 
@@ -379,8 +418,8 @@ ping 172.16.31.1
 configure terminal
 \end{lstlisting}
 
-            The configurations found in the config file % TODO ref to an appendix %
-            should be adjusted and then copied to the configuration terminal.
+            The configurations found in the configuration file provided
+            should be adjusted and then copied to the configuration terminal:
 
             To configure the Interface GE0:
 
@@ -431,21 +470,49 @@ route add default gw 172.16.31.254 # on tux34
             Tux32 has a route that allows it to access the network 172.16.30.0 via
             the IP 172.16.31.253, which belongs to Tux34, and a default gw 172.16.31.254
             to access the internet.
+
             Tux33 has a route that allows it to access the network 172.16.31.0 via
             the IP 172.16.30.254, which belongs to Tux34, and a default gw 172.16.30.254
             (tux34). 
+
             Tux34 has a default gw 172.16.31.254 to access the internet.
+
+
+            \noindent Forwarding table entries contain:
+            \begin{itemize} 
+                \item The target's IP address/network
+                \item Netmask
+                \item Gateway
+                \item Network Interface
+                \item Metric
+            \end{itemize}
+
+            It was verified that ARP requests were sent by tux34 to determine the MAC address of 
+            tux33's eth0, tux33 also sent a request to get the MAC address of tux34.
+            
+            The MAC addresses associated to the ICMP packets are the ones belonging to the
+            origin and target devices, however due to forwarding the IP addresses associated
+            might not be from the origin/target but from the device doing the forwarding.
+            For example if it's between tux33 and tux32, the MAC addresses correspond to those
+            two but the IP to tux34.
+            
 
 
 %%% Conclusions %%%
 \section{Conclusions}
-    % TODO
+    This assignment allowed us to implement an FTP client (download application) and configure a computer network.
+    The download application was successfully tested over the configured network.
+    The analysis and discussion of the configured network allowed us to deepen our knowledge in computer networks.
 
 
 %%% References %%%
 \section{References}
-    % TODO
-
+\begin{itemize}
+    \item FTP RFC -- \href{https://www.rfc-editor.org/info/rfc959}{https://www.rfc-editor.org/info/rfc959}
+    \item URL RFC -- \href{https://www.rfc-editor.org/info/rfc1738}{https://www.rfc-editor.org/info/rfc1738}
+    \item \href{https://www.cisco.com/c/en/us/td/docs/switches/datacenter/nexus6000/sw/unicast/7_x/cisco_n6k_layer3_ucast_cfg_rel_x/l3_route.pdf}{Configuring Static Routing}
+    \item \href{https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/ipaddr_nat/configuration/xe-16/nat-xe-16-book/iadnat-addr-consv.html}{Configure NAT in a commercial router}
+\end{itemize}
 
 
 \newpage
@@ -466,13 +533,66 @@ route add default gw 172.16.31.254 # on tux34
         
         \lstinputlisting[language=C, caption=ftp\_return\_codes.c]{../src/ftp_return_codes.h}
 
-    %% Configuration commands %%
-    \subsection{Configuration commands}
-        % TODO
-
     %% Logs captured %%
     \subsection{Logs captured}
-        %% TODO \subsubsections for each experiment
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux32-step7.png}
+        \end{figure}
 
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux32-step72.png}
+        \end{figure}
+        
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux32-step73.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux33-step7.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux33-step72.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux33-step73.png}
+        \end{figure}
+        
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux34-step7.png}
+        \end{figure}
+        
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux34-step72.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp2-tux34-step73.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp3-tux33-step5.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp4-tux33-step10.png}
+        \end{figure}
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.6]{./imgs/exp4-tux34-step14.png}
+        \end{figure}   
 
 \end{document}
