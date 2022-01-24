@@ -2,3 +2,7 @@ download
 downloadd
 example
 .vscode
+docs/*
+!docs/report.tex
+!docs/report.pdf
+!docs/imgs
