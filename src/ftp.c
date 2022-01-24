@@ -25,7 +25,6 @@ static char *get_ip(char *host_name) {
 
     struct hostent *h = NULL;
 
-    // TODO maybe use getaddrinfo(3) instead (not obsolete)
     if ((h = gethostbyname(host_name)) == NULL) {
         herror("gethostbyname()");
         return NULL;
@@ -77,8 +76,6 @@ static int ftp_read_line(int socket_fd, char **recv_buffer) {
         if (res == -1) {
             return -1;
         } else if (res == 0) {
-            // TODO what to do?
-            printf("FTP connection closed already.\n");
             return -1;
         }
 
@@ -133,7 +130,7 @@ static int ftp_read_response(int socket_fd, int *port) {
             return -1;
         }
 
-        printf("RECV: %s", line_received); // << DEBUG
+        printf("RECV: %s", line_received);
 
         response_code = atoi(line_received);
         int resp_num_digits = get_num_length(response_code);
@@ -199,7 +196,7 @@ static int ftp_send_command(int socket_fd, char *command, char *arg) {
         free(cmd);
         return -1;
     }
-    printf("SENT: %s", cmd); // << DEBUG
+    printf("SENT: %s", cmd);
 
     free(cmd);
     return 0;
@@ -215,7 +212,6 @@ int ftp_login(int socket_fd, char *user, char *pass) {
     }
 
     if (ftp_read_response(socket_fd, NULL) != FTP_CODE_USER_NAME_OKAY_NEED_PASSWORD) {
-        // TODO should we check for other returns? there are many...
         return -1;
     }
 
@@ -224,7 +220,6 @@ int ftp_login(int socket_fd, char *user, char *pass) {
     }
 
     if (ftp_read_response(socket_fd, NULL) != FTP_CODE_LOGIN_SUCCESSFUL) {
-        // TODO should we check for other returns? there are many...
         return -1;
     }
 
@@ -239,7 +234,6 @@ static int ftp_send_passv_and_get_port(int socket_fd) {
     }
 
     if (ftp_read_response(socket_fd, &port) != FTP_CODE_ENTERING_PASSIVE_MODE) {
-        // TODO should we check for other returns? there are many...
         return -1;
     }
 
@@ -309,9 +303,7 @@ int ftp_download_file(int socket_fd, char *host, char *path) {
 
 int ftp_close(int socket_fd) {
     ftp_send_command(socket_fd, "QUIT", "");
-    if (ftp_read_response(socket_fd, NULL) != FTP_CODE_SERVICE_CLOSING_CONTROL_CONNECTION) {
-        // TODO should we check for other returns? there are many...
-    }
+    ftp_read_response(socket_fd, NULL);
 
     close(socket_fd);
     return 0;

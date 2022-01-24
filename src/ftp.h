@@ -1,4 +1,3 @@
-#define FTP_DATA_PORT 20
 #define FTP_COMMAND_PORT 21
 
 int ftp_setup(char *host);

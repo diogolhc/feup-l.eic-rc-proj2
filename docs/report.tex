@@ -59,7 +59,7 @@
 \end{center}
 
     % TODO
-
+    
 
 
 %%% Introduction %%%
@@ -69,14 +69,85 @@
 
 %%% Part 1 - Download application %%%
 \section{Part 1 -- Download application}
+    As part of this 2nd lab assignment, we had to implement a download application that uses
+    the FTP (File Transfer Protocol), described in \href{https://www.rfc-editor.org/info/rfc959}{RFC959},
+    and takes an an argument that adopts the URL syntax as described in
+    \href{https://www.rfc-editor.org/info/rfc1738}{RFC1738}. In this specific case, the URl is in the
+    following format:
+    
+    $$ ftp://[<user>:<password>@]<host>/<url-path> $$
+    
 
     %% Architecture of the download application %%
     \subsection{Architecture of the download application}
-        % TODO
+        The application has two main modules: parser and FTP client.
+        The parser module takes the argument given to the application and breaks it into
+        \textit{user}, \textit{password}, \textit{host}, and \textit{url-path}.
+        This is accomplished using the following regular expression defined in \textit{parser.c}:
+
+\begin{lstlisting}[language=C]
+char *REGULAR_EXPRESSION = "ftp://((.+):(.+)@)?([^/@:]+)/([^\f\n\r\t\v\x20]*)";
+\end{lstlisting}
+        
+        \noindent The function that parses the input is:
+\begin{lstlisting}[language=C]
+parsed_params_t* parse_input_params(const char* input);
+\end{lstlisting}
+
+        \noindent and the return structure is declared as follows in \textit{parser.h}:
+\begin{lstlisting}[language=C]
+typedef struct parsed_params {
+    char *user;
+    char *password;
+    char *host;
+    char *url_path;
+} parsed_params_t;
+\end{lstlisting}
+
+        \noindent After the URL has been parsed into the structure, the FTP client can proceed.
+
+        First, we need to get the IP address associated with the given \textit{host}. That is accomplished
+        in the following function defined in \textit{ftp.c}:
+\begin{lstlisting}[language=C]
+static char *get_ip(char *host_name);
+\end{lstlisting}   
+
+        \noindent The application now creates a socket and connects it to the obtained IP in the previous step in
+        the FTP control port (21). Then, it uses the \textit{user} and \textit{password} to login. The function
+        that does that is defined in \textit{ftp.c}:
+\begin{lstlisting}[language=C]
+int ftp_login(int socket_fd, char *user, char *pass);
+\end{lstlisting}
+
+        \noindent It sends a USER command with the given \textit{user} and reads the response. If it has
+        a 331 reply code (User name okay, need password.) it proceeds to send a PASS command with the
+        given \textit{password} and check if the response has a 230 reply code (User logged in, proceed.)
+        which indicates that the user is logged in and can now proceed to the download.
+
+        The download is done in the following function defined in \textit{ftp.c}:
+\begin{lstlisting}[language=C]
+int ftp_download_file(int socket_fd, char *host, char *path);
+\end{lstlisting}
+
+        \noindent it sends a PASV command and gets the \textit{port} in the response so that it can connect
+        to that port to receive the file. Then, it sends a RETR command with the given \textit{url-path} to
+        the control connection and reads the file in the data connection. Once the download is finished it checks
+        the reply codes to make sure the download occurred without errors.
+
+        \noindent Finally, the application sends a QUIT command in control connection to finish the connection.
+
 
     %% Report of a successful download %%
     \subsection{Report of a successful download}
-        % TODO
+        The application was tested in several FTP servers both with username and as anonymous. The
+        following image describes a usage in \textit{netlab1.fe.up.pt}:
+
+        \begin{figure}[H]
+            \centering
+            \includegraphics[scale=0.4]{./imgs/download.png}
+            \caption{Successful download.}
+            \label{fig:download}
+        \end{figure}
 
 
 %%% Part 2 - Network configuration and analysis %%%
@@ -84,36 +155,134 @@
 
     %% Experiment 1 %%
     \subsection{Experiment 1}
+
+        % Objectives %
+        \subsubsection{Objectives}
+            This experiment aims to configure the IP addresses of two computers and connect
+            them to a Switch which should result in a network allowing both computers to
+            communicate.
+
         % Network architecture %
         \subsubsection{Network architecture}
-            % TODO
-
-        % Experiment objectives %
-        \subsubsection{Experiment objectives}
-            % TODO
-
+            This experiment uses two \textit{tux} computers (tux33, tux34) and the 
+            \textit{Cisco} Switch. Each computer should be connected to the Switch 
+            using an \textit{eth} port, for now both computers will use eth0. 
+            
         % Main configuration commands %
         \subsubsection{Main configuration commands}
-            % TODO
+            First we need to configure the eth0 Network Interfaces on both computers, this
+            is done using the following commands:
 
+\begin{lstlisting}[language=sh]
+ifconfig eth0 up                # Activates eth0 on both tuxs
+ifconfig eth 0 172.16.30.1/24   # On tux33, configures it's ip address on eth0
+ifconfig eth 0 172.16.30.254/24 # On tux34, configures it's ip address on eth0
+
+route -n    # Inspect the routes that were setup
+arp -a      # Check the arp tables
+\end{lstlisting}
+
+            Arp  packets are used to map an IP address to 
+            a physical address (MAC). When a host wants to send a packet to another host, whose 
+            IP address is known but not the MAC, on the same LAN it first Broadcasts an ARP packet 
+            that asks for the MAC address associated with the destination's IP address. 
+            This is needed as Network Interface Controllers don't have IP addresses but 
+            MAC addresses. We should now be able to ping the tux33 from tux34 and vice-versa.
+            The ping command uses ICMP packets, these packets are sent from both origin (request) 
+            and the destination (response). ICMP packets contain the Ether layer, which has both
+            target and source's MAC addresses, and also contains the IP layer that holds the
+            source's and target's IP addresses. 
+            % TODO esta parte está muito solta%
+            Ethernet frames have an header, and this header has an EtherType field, this field
+            is what indicates which protocol is encased in the payload (ARP, IP, ICMP, etc.), 
+            the size of these frames can be determined by detecting the end of the frame that
+            is usually indicated by the end of data stream symbol at the physical layer.
+            A loopback interface is a virtual interface that is always active and reachable as 
+            long as at least one of the switch's IP interfaces is up and running. This is important 
+            due to it's address persistance, whereas interfaces or addresses of a device may change, 
+            the loopback's address doesn't.
+
+            
         % Analysis of the logs %
         \subsubsection{Analysis of the logs}
-            % TODO
+            % TODO logs
+            
+            
+
 
 
     %% Experiment 2 %%
     \subsection{Experiment 2}
+        % Objectives %
+        \subsubsection{Objectives}
+            In this experiment 2 virtual LANs will be setup on the switch. 
+            VLAN30 composed by previously configurated tux33 and tux34, and VLAN31 composed
+            by tux32. These virtual LANs will stop the tux32 from accessing tux33 and tux34,
+            and vice-versa, even though they are all connected to the same switch
+            
         % Network architecture %
         \subsubsection{Network architecture}
-            % TODO
-
-        % Experiment objectives %
-        \subsubsection{Experiment objectives}
-            % TODO
+            This experiment will use the architecture described in the experiment 1 with the
+            addition of tux32 whose eth0 interface will also be connected to the switch.
 
         % Main configuration commands %
         \subsubsection{Main configuration commands}
-            % TODO
+            The configuration of tux33 and tux34 is the same as described in the previous
+            experiment, and tux32 will be configurated in a similar fashion:
+
+\begin{lstlisting}[language=sh]
+ifconfig eth0 up                # Activates eth0
+ifconfig eth0 172.16.31.1/24    # Configures it's ip address on eth0
+\end{lstlisting}
+
+            The switch also needs to be configurated which can be done by connecting one of
+            the tux's serial ports to the switch controller. After accessing the Switch's
+            terminal to create the VLANs use:
+
+\begin{lstlisting}[language=sh]
+configure terminal  # Configure terminal
+vlan 30             # Create VLAN 30
+vlan 31             # Create VLAN 31
+end                 # Exit config mode
+\end{lstlisting}
+
+            Now the ports for each VLAN have to be specified, for simplification purposes
+            the ports used for each tux are: % TODO don't say this, just say we used these
+
+            \begin{itemize}
+                \item tux32 -- PORT 12
+                \item tux33 -- PORT 3
+                \item tux34 -- PORT 4
+            \end{itemize}
+
+            We now need to include ports 3 and 4 in VLAN30, and port 12 in VLAN31:
+
+\begin{lstlisting}[caption=Adding port 3 to VLAN30]
+Switch# configure terminal
+Switch(config)# interface fastethernet 0/3
+Switch(config-if)# switchport mode access
+Switch(config-if)# switchport access vlan 30
+Switch(config-if)# end
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Adding port 4 to VLAN30]
+Switch# configure terminal
+Switch(config)# interface fastethernet 0/4
+Switch(config-if)# switchport mode access
+Switch(config-if)# switchport access vlan 30
+Switch(config-if)# end
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Adding port 12 to VLAN31]
+Switch# configure terminal
+Switch(config)# interface fastethernet 0/12
+Switch(config-if)# switchport mode access
+Switch(config-if)# switchport access vlan 31
+Switch(config-if)# end
+\end{lstlisting}
+
+            % TODO How many broadcast domains are there? How can you conclude it from the logs %
+
 
         % Analysis of the logs %
         \subsubsection{Analysis of the logs}
@@ -122,12 +291,12 @@
 
     %% Experiment 3 %%
     \subsection{Experiment 3}
-        % Network architecture %
-        \subsubsection{Network architecture}
+        % Objectives %
+        \subsubsection{Objectives}
             % TODO
 
-        % Experiment objectives %
-        \subsubsection{Experiment objectives}
+        % Network architecture %
+        \subsubsection{Network architecture}
             % TODO
 
         % Main configuration commands %
@@ -141,21 +310,131 @@
 
     %% Experiment 4 %%
     \subsection{Experiment 4}
+        % Objectives %
+        \subsubsection{Objectives}
+            First we need to add tux34 to VLAN31 and setup a route that allows
+            tux33 to access tux32 through tux34. Tux32 and Tux33 should be able to access
+            each other.
+
+            The Cisco Router should be configurated in such a way that it can access 
+            the Internet through the Lab Router, and added to VLAN31. This should
+            allow computers that are on VLAN31 to also access the Internet.
+            The final objective is to have access to the internet on tux33, since it
+            can already reach devices on VLAN31 due to previous routing configuration
+            all that's left is to also configure routes on the Cisco Router.
+
         % Network architecture %
         \subsubsection{Network architecture}
-            % TODO
-
-        % Experiment objectives %
-        \subsubsection{Experiment objectives}
-            % TODO
+            The architecture to be used in this experiment should be close to that used
+            in experiment 2 with some additions.
+            Tux34 will need to have it's eth1 interface connected to the switch, using
+            for example PORT 14, so that it can be added to VLAN31.
+            The Cisco router GE0 interface should be connected to the Lab Router and 
+            the GE1 interface to the switch, using for example PORT 19. 
 
         % Main configuration commands %
         \subsubsection{Main configuration commands}
-            % TODO
+            We now need to setup the tux34's IP address for interface eth1.
+
+\begin{lstlisting}[language=sh]
+ifconfig eth1 up                # Activates eth1
+ifconfig eth1 172.16.31.253/24  # Configures it's ip address on eth1
+\end{lstlisting}
+            
+            \noindent To enable port forwarding the following command must be used:
+\begin{lstlisting}[language=sh]
+echo 1 > /proc/sys/net/ipv4/ip\_forward
+\end{lstlisting}
+
+            \noindent The proper routes must also be setup so that tux32 and tux33 are in touch.
+            On tux33:
+
+\begin{lstlisting}[language=sh]
+route add -net 172.16.31.0/24 gw 172.16.30.254 # Allows access to 172.16.31.X through tux34 (172.16.30.254)
+\end{lstlisting}
+
+            On tux32:
+
+\begin{lstlisting}[language=sh]
+route add -net 172.16.30.0/24 gw 172.16.31.253 # Allows access to 172.16.30.X through tux34 (172.16.31.253)
+\end{lstlisting}
+
+            % TODO broken english, but use the pings below on the lstlisting
+            Tux33 should now be able to communicate with every the other network interface 
+            (172.16.30.254, 172.16.31.253, 172.16.31.1) this can be checked by using 
+            \textit{ping}.
+
+\begin{lstlisting}[language=sh]
+ping 172.16.30.254
+ping 172.16.31.253
+ping 172.16.31.1
+\end{lstlisting}
+
+
+            To configure the Cisco router its controller must be connected to one of the
+            tux's serial port. After accessing the console the following command is used to
+            enter config mode:
+
+\begin{lstlisting}[language=sh]
+configure terminal
+\end{lstlisting}
+
+            The configurations found in the config file % TODO ref to an appendix %
+            should be adjusted and then copied to the configuration terminal.
+
+            To configure the Interface GE0:
+
+\begin{lstlisting}[language=sh]
+interface GigabitEthernet0/0 # Interface GE0
+  ip address 172.16.2.59 255.255.255.0 # IP address and mask
+  ip nat outside # NAT outside as this interface should reach the Lab Router
+\end{lstlisting}
+
+            To configure the Interface GE1:
+\begin{lstlisting}[language=sh]
+interface GigabitEthernet0/1 # Interface GE1
+  ip address 172.16.51.254 255.255.255.0 # IP address and mask
+  ip nat inside # NAT inside as this interface should reach the Cisco Switch
+\end{lstlisting}
+
+
+            Setting up the routes to allow the Cisco Router to have access to 172.16.30.X/24:
+
+\begin{lstlisting}[language=sh]
+ip route 172.16.50.0 255.255.255.0 172.16.51.253
+\end{lstlisting}
+
+            Default gateway configuration:
+
+\begin{lstlisting}[language=sh]
+ip route 0.0.0.0 0.0.0.0 172.16.2.254
+\end{lstlisting}
+
+            The \textit{nat pool ovrld} uses IP address 172.16.2.59
+            Adding the networks 172.16.30.0/24 and 172.16.31.0/24 to the access list:
+
+\begin{lstlisting}[language=sh]
+access-list 1 permit 172.16.50.0 0.0.0.7
+access-list 1 permit 172.16.51.0 0.0.0.7
+\end{lstlisting}
+
+            With router's setup complete, the default gateways must be added to tux32, tux33 and tux34:
+
+\begin{lstlisting}[language=sh]
+route add default gw 172.16.31.254 # on tux32
+route add default gw 172.16.30.254 # on tux33
+route add default gw 172.16.31.254 # on tux34
+\end{lstlisting}
 
         % Analysis of the logs %
         \subsubsection{Analysis of the logs}
-            % TODO
+            Tux32 has a route that allows it to access the network 172.16.30.0 via
+            the IP 172.16.31.253, which belongs to Tux34, and a default gw 172.16.31.254
+            to access the internet.
+            Tux33 has a route that allows it to access the network 172.16.31.0 via
+            the IP 172.16.30.254, which belongs to Tux34, and a default gw 172.16.30.254
+            (tux34). 
+            Tux34 has a default gw 172.16.31.254 to access the internet.
 
 
 %%% Conclusions %%%
@@ -174,7 +453,18 @@
 \section{Annexes}
     %% Code of the download application %%
     \subsection{Code of the download application}
-        % TODO
+
+        \lstinputlisting[language=C, caption=download.c]{../src/download.c}
+        
+        \lstinputlisting[language=C, caption=ftp.h]{../src/ftp.h}
+        
+        \lstinputlisting[language=C, caption=ftp.c]{../src/ftp.c}
+        
+        \lstinputlisting[language=C, caption=parser.h]{../src/parser.h}
+        
+        \lstinputlisting[language=C, caption=parser.c]{../src/parser.c}
+        
+        \lstinputlisting[language=C, caption=ftp\_return\_codes.c]{../src/ftp_return_codes.h}
 
     %% Configuration commands %%
     \subsection{Configuration commands}
